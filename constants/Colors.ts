@@ -1,6 +1,6 @@
 export const Colors = {
   primary: '#685AFF',
-  background: '#F1F3F5',
+  background: '#F9FAFB',
   grayscale: {
     900: '#111827',
     700: '#4B5563',

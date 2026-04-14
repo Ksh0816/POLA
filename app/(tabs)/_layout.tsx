@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 
 export default function TabLayout() {
   return (
@@ -11,15 +12,20 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.grayscale[500],
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
+          borderTopWidth: 0,
           borderTopColor: Colors.grayscale[300],
-          paddingBottom: 8,
+          height: 85,
+          paddingBottom: 36,
           paddingTop: 8,
-          height: 60,
+          paddingHorizontal: 24,
         },
         tabBarLabelStyle: {
           fontFamily: 'Paybooc-Bold',
           fontSize: 12,
+          paddingTop: 8, 
+        },
+        tabBarItemStyle: {
+          paddingVertical: 0,
         },
       }}
     >
@@ -27,8 +33,18 @@ export default function TabLayout() {
         name="home"
         options={{
           title: '홈',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <View style={{
+              backgroundColor: focused ? Colors.lightBlue : 'transparent',
+              width: 40,
+              height: 40,
+              borderRadius: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}>
+              <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -36,8 +52,18 @@ export default function TabLayout() {
         name="schedule"
         options={{
           title: '일정',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <View style={{
+              backgroundColor: focused ? Colors.lightBlue : 'transparent',
+              width: 40,
+              height: 40,
+              borderRadius: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}>
+              <Ionicons name={focused ? "calendar" : "calendar-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -45,8 +71,18 @@ export default function TabLayout() {
         name="homework"
         options={{
           title: '과제',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-text-outline" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <View style={{
+              backgroundColor: focused ? Colors.lightBlue : 'transparent',
+              width: 40,
+              height: 40,
+              borderRadius: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}>
+              <Ionicons name={focused ? "document-text" : "document-text-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -54,8 +90,18 @@ export default function TabLayout() {
         name="question"
         options={{
           title: '질문',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <View style={{
+              backgroundColor: focused ? Colors.lightBlue : 'transparent',
+              width: 40,
+              height: 40,
+              borderRadius: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 4,
+            }}>
+              <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
