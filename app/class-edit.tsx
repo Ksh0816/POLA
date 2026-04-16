@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuthStore } from '../store/authStore';
 
@@ -27,8 +27,9 @@ const ICONS = [
   'bulb', 'code-slash', 'construct', 'brush', 'language'
 ];
 
-export default function ClassCreate() {
+export default function ClassEdit() {
   const router = useRouter();
+  const { id } = useLocalSearchParams();
   const { user } = useAuthStore();
   
   const [className, setClassName] = useState('');
@@ -47,6 +48,51 @@ export default function ClassCreate() {
   const [tempTime, setTempTime] = useState<Date>(new Date());
   
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchClass = async () => {
+      if (!id) return;
+      try {
+        const docRef = doc(db, 'Classes', id as string);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setClassName(data.name || '');
+          setIcon(data.icon || 'calculator');
+          setCategoryColor(data.categoryColor || Colors.categories.purple);
+          if (data.startDate) setStartDate(new Date(data.startDate));
+          if (data.endDate) setEndDate(new Date(data.endDate));
+          
+          if (data.schedules) {
+            const d = data.schedules.map((s: any) => s.day);
+            setSelectedDays(d);
+            const dt: Record<string, { start: Date, end: Date }> = {};
+            data.schedules.forEach((s: any) => {
+              const parseTime = (timeStr: string) => {
+                 const cleanTimeStr = timeStr.replace('오전', 'AM').replace('오후', 'PM');
+                 const [time, period] = cleanTimeStr.split(' ');
+                 const [h, m] = time.split(':');
+                 let hours = parseInt(h, 10);
+                 if (period === 'PM' && hours < 12) hours += 12;
+                 if (period === 'AM' && hours === 12) hours = 0;
+                 const d = new Date();
+                 d.setHours(hours, parseInt(m, 10), 0, 0);
+                 return d;
+              };
+              dt[s.day] = {
+                start: s.startTime ? parseTime(s.startTime) : new Date(),
+                end: s.endTime ? parseTime(s.endTime) : new Date()
+              };
+            });
+            setDayTimes(dt);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching class to edit:", error);
+      }
+    };
+    fetchClass();
+  }, [id]);
 
   const toggleDay = (dayId: string) => {
     if (selectedDays.includes(dayId)) {
@@ -99,7 +145,7 @@ export default function ClassCreate() {
     }
   };
 
-  const handleCreate = async () => {
+  const handleUpdate = async () => {
     if (!className) {
       Alert.alert('알림', '수업 이름을 입력해주세요.');
       return;
@@ -111,68 +157,27 @@ export default function ClassCreate() {
 
     setLoading(true);
     try {
-      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
       const schedules = selectedDays.map(dayId => ({
         day: dayId,
         startTime: formatTimeEn(dayTimes[dayId].start),
         endTime: formatTimeEn(dayTimes[dayId].end),
       }));
 
-      const classDocRef = await addDoc(collection(db, 'Classes'), {
-        teacherId: user?.uid,
-        teacherName: user?.name,
+      await updateDoc(doc(db, 'Classes', id as string), {
         name: className,
         icon: icon,
         categoryColor: categoryColor,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         schedules: schedules,
-        students: [],
-        inviteCode: inviteCode,
-        createdAt: new Date().toISOString(),
       });
 
-      // Generate lessons
-      const dayMap: Record<string, number> = { 'sun': 0, 'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6 };
-      const selectedDayNumbers = selectedDays.map(d => dayMap[d]);
-      const current = new Date(startDate);
-      current.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      const lessonsPromises = [];
-      while (current <= end) {
-        if (selectedDayNumbers.includes(current.getDay())) {
-          const dayId = selectedDays.find(d => dayMap[d] === current.getDay());
-          if (dayId) {
-             const timeStart = dayTimes[dayId].start;
-             const timeEnd = dayTimes[dayId].end;
-             
-             const lessonDate = new Date(current);
-             lessonDate.setHours(timeStart.getHours(), timeStart.getMinutes(), 0, 0);
-             
-             lessonsPromises.push(addDoc(collection(db, 'Lessons'), {
-               classId: classDocRef.id,
-               date: lessonDate.toISOString(),
-               startTime: formatTimeEn(timeStart),
-               endTime: formatTimeEn(timeEnd),
-               status: 'scheduled',
-               createdAt: new Date().toISOString()
-             }));
-          }
-        }
-        current.setDate(current.getDate() + 1);
-      }
-      
-      await Promise.all(lessonsPromises);
-
-      Alert.alert('성공', '수업이 성공적으로 생성되었습니다.', [
-        { text: '확인', onPress: () => router.replace('/(tabs)/home') }
+      Alert.alert('성공', '수업이 성공적으로 수정되었습니다.', [
+        { text: '확인', onPress: () => router.back() }
       ]);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('오류', '수업 생성 중 오류가 발생했습니다.');
+      Alert.alert('오류', '수업 수정 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -182,9 +187,9 @@ export default function ClassCreate() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={20} color={Colors.grayscale[900]} />
+          <Ionicons name="arrow-back" size={24} color={Colors.grayscale[900]} />
         </TouchableOpacity>
-        <Text style={styles.title}>수업 생성</Text>
+        <Text style={styles.title}>수업 수정</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -282,10 +287,10 @@ export default function ClassCreate() {
 
         <TouchableOpacity 
           style={[styles.createButton, loading && { backgroundColor: Colors.grayscale[500] }]} 
-          onPress={handleCreate}
+          onPress={handleUpdate}
           disabled={loading}
         >
-          <Text style={styles.createButtonText}>{loading ? '생성 중...' : '수업 생성하기'}</Text>
+          <Text style={styles.createButtonText}>{loading ? '수정 중...' : '수정하기'}</Text>
         </TouchableOpacity>
         <View style={{ height: 40 }} />
       </ScrollView>

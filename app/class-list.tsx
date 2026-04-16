@@ -98,7 +98,7 @@ export default function ClassList() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.grayscale[900]} />
+          <Ionicons name="arrow-back" size={20} color={Colors.grayscale[900]} />
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{classData?.name}</Text>
         <View style={styles.headerRight} />
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center', fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900], paddingHorizontal: 16 },
   backButton: { width: 40, alignItems: 'flex-start' },
   headerRight: { width: 40, alignItems: 'flex-end' },
-  monthSelectorContainer: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.grayscale[200] },
+  monthSelectorContainer: { backgroundColor: '#FFF', borderBottomWidth: 0, borderBottomColor: Colors.grayscale[200] },
   monthSelectorContent: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   monthButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.grayscale[100], marginRight: 8 },
   monthButtonSelected: { backgroundColor: Colors.grayscale[900] },
@@ -187,12 +187,12 @@ const styles = StyleSheet.create({
   content: { flex: 1, padding: 16, backgroundColor: Colors.grayscale[100] },
   emptyState: { padding: 32, alignItems: 'center', backgroundColor: '#FFF', borderRadius: 24, marginTop: 16 },
   emptyText: { fontFamily: 'Paybooc-Bold', fontSize: 14, color: Colors.grayscale[500] },
-  lessonCard: { backgroundColor: '#FFF', borderRadius: 24, marginBottom: 12, flexDirection: 'row', paddingVertical: 20, paddingHorizontal: 24, alignItems: 'center' },
+  lessonCard: { backgroundColor: '#FFF', borderRadius: 24, marginBottom: 12, flexDirection: 'row', paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center' },
   colorBarWrapper: { justifyContent: 'center', marginRight: 16 },
   lessonCardColorBar: { width: 4, height: 44, borderRadius: 2 },
   lessonCardContent: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lessonDate: { fontFamily: 'Paybooc-Bold', fontSize: 14, color: Colors.grayscale[900], marginBottom: 4 },
-  lessonTime: { fontFamily: 'Paybooc-Bold', fontSize: 12, color: Colors.grayscale[500] },
+  lessonDate: { fontFamily: 'Paybooc-Bold', fontSize: 15, color: Colors.grayscale[900], marginBottom: 4 },
+  lessonTime: { fontFamily: 'Paybooc-Bold', fontSize: 13, color: Colors.grayscale[500] },
   relativeDateBadge: { backgroundColor: Colors.grayscale[100], paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
-  relativeDateText: { fontFamily: 'Paybooc-Bold', fontSize: 14, color: Colors.grayscale[700] },
+  relativeDateText: { fontFamily: 'Paybooc-Bold', fontSize: 13, color: Colors.grayscale[700] },
 });
