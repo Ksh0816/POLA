@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, FlatList } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -58,11 +58,27 @@ export default function Schedule() {
     }
   };
 
+  const flatListRef = useRef<FlatList>(null);
+
   useFocusEffect(
     useCallback(() => {
-      setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      setSelectedDate(todayStr);
       fetchClassesAndUsers();
-    }, [user])
+      
+      // We want today's date to be the 3rd item from the left (index 2 in viewport).
+      // So the item at index (todayIndex - 2) should be at the start.
+      const todayIndex = scrollDates.findIndex(date => format(date, 'yyyy-MM-dd') === todayStr);
+      if (todayIndex !== -1 && flatListRef.current) {
+         // Use setTimeout to ensure the list has laid out
+         setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+               index: Math.max(0, todayIndex - 2),
+               animated: false,
+            });
+         }, 100);
+      }
+    }, [user, scrollDates])
   );
 
   useEffect(() => {
@@ -102,7 +118,7 @@ export default function Schedule() {
   const scrollDates = useMemo(() => generateDates(), []);
   
   const getInitialScrollIndex = () => {
-    return scrollDates.findIndex(date => format(date, 'yyyy-MM-dd') === selectedDate) || 30; // 30 is today's index
+    return scrollDates.findIndex(date => format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')) || 30;
   };
 
   const dayNamesMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -168,11 +184,15 @@ export default function Schedule() {
       {/* Week Strip */}
       <View style={styles.weekStripContainer}>
         <FlatList
+          ref={flatListRef}
           data={scrollDates}
           horizontal
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={getInitialScrollIndex()}
-          getItemLayout={(data, index) => ({ length: 64, offset: 64 * index, index })} // Approximate width per item
+          onScrollToIndexFailed={(info) => {
+            console.log('Scroll to index failed:', info);
+          }}
+          getItemLayout={(data, index) => ({ length: 64, offset: 64 * index, index })} // approximate width (48 width + 16 gap)
           keyExtractor={(item) => format(item, 'yyyy-MM-dd')}
           renderItem={({ item }) => {
             const isSelected = format(item, 'yyyy-MM-dd') === selectedDate;
