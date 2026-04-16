@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuthStore } from '../store/authStore';
+
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 const DAYS = [
   { id: 'mon', label: 'M' },
@@ -18,24 +21,30 @@ const DAYS = [
   { id: 'sun', label: 'S' },
 ];
 
-const ICONS = ['book', 'language', 'calculator', 'musical-notes', 'flask', 'earth'];
+const ICONS = [
+  'calculator', 'book', 'document-text', 'flask', 'color-palette', 
+  'musical-notes', 'earth', 'pencil', 'star', 'barbell', 
+  'bulb', 'code-slash', 'construct', 'brush', 'language'
+];
 
 export default function ClassCreate() {
   const router = useRouter();
   const { user } = useAuthStore();
   
   const [className, setClassName] = useState('');
-  const [icon, setIcon] = useState('book');
+  const [icon, setIcon] = useState('calculator');
   const [categoryColor, setCategoryColor] = useState(Colors.categories.purple);
   const [iconModalVisible, setIconModalVisible] = useState(false);
   
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date(new Date().setMonth(new Date().getMonth() + 1)));
   const [showDatePicker, setShowDatePicker] = useState<'start' | 'end' | null>(null);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
 
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [dayTimes, setDayTimes] = useState<Record<string, { start: Date, end: Date }>>({});
   const [showTimePicker, setShowTimePicker] = useState<{day: string, type: 'start' | 'end'} | null>(null);
+  const [tempTime, setTempTime] = useState<Date>(new Date());
   
   const [loading, setLoading] = useState(false);
 
@@ -53,11 +62,41 @@ export default function ClassCreate() {
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatTimeEn = (date: Date) => {
+    return format(date, 'h:mm a');
   };
-  const formatDate = (date: Date) => {
+  
+  const formatDateStr = (date: Date) => {
     return `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2,'0')}.${date.getDate().toString().padStart(2,'0')}`;
+  };
+
+  const openDatePicker = (type: 'start' | 'end') => {
+    setTempDate(type === 'start' ? startDate : endDate);
+    setShowDatePicker(type);
+  };
+  
+  const handleDateConfirm = () => {
+    if (showDatePicker === 'start') setStartDate(tempDate);
+    if (showDatePicker === 'end') setEndDate(tempDate);
+    setShowDatePicker(null);
+  };
+
+  const openTimePicker = (day: string, type: 'start' | 'end') => {
+    setTempTime(dayTimes[day][type]);
+    setShowTimePicker({day, type});
+  };
+
+  const handleTimeConfirm = () => {
+    if (showTimePicker) {
+       setDayTimes({
+         ...dayTimes,
+         [showTimePicker.day]: {
+           ...dayTimes[showTimePicker.day],
+           [showTimePicker.type]: tempTime
+         }
+       });
+       setShowTimePicker(null);
+    }
   };
 
   const handleCreate = async () => {
@@ -76,11 +115,11 @@ export default function ClassCreate() {
       
       const schedules = selectedDays.map(dayId => ({
         day: dayId,
-        startTime: formatTime(dayTimes[dayId].start),
-        endTime: formatTime(dayTimes[dayId].end),
+        startTime: formatTimeEn(dayTimes[dayId].start),
+        endTime: formatTimeEn(dayTimes[dayId].end),
       }));
 
-      await addDoc(collection(db, 'Classes'), {
+      const classDocRef = await addDoc(collection(db, 'Classes'), {
         teacherId: user?.uid,
         teacherName: user?.name,
         name: className,
@@ -93,6 +132,40 @@ export default function ClassCreate() {
         inviteCode: inviteCode,
         createdAt: new Date().toISOString(),
       });
+
+      // Generate lessons
+      const dayMap: Record<string, number> = { 'sun': 0, 'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6 };
+      const selectedDayNumbers = selectedDays.map(d => dayMap[d]);
+      const current = new Date(startDate);
+      current.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      const lessonsPromises = [];
+      while (current <= end) {
+        if (selectedDayNumbers.includes(current.getDay())) {
+          const dayId = selectedDays.find(d => dayMap[d] === current.getDay());
+          if (dayId) {
+             const timeStart = dayTimes[dayId].start;
+             const timeEnd = dayTimes[dayId].end;
+             
+             const lessonDate = new Date(current);
+             lessonDate.setHours(timeStart.getHours(), timeStart.getMinutes(), 0, 0);
+             
+             lessonsPromises.push(addDoc(collection(db, 'Lessons'), {
+               classId: classDocRef.id,
+               date: lessonDate.toISOString(),
+               startTime: formatTimeEn(timeStart),
+               endTime: formatTimeEn(timeEnd),
+               status: 'scheduled',
+               createdAt: new Date().toISOString()
+             }));
+          }
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      
+      await Promise.all(lessonsPromises);
 
       Alert.alert('성공', '수업이 성공적으로 생성되었습니다.', [
         { text: '확인', onPress: () => router.replace('/(tabs)/home') }
@@ -109,12 +182,10 @@ export default function ClassCreate() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>{'<'}</Text>
+          <Ionicons name="arrow-back" size={24} color={Colors.grayscale[900]} />
         </TouchableOpacity>
         <Text style={styles.title}>수업 생성</Text>
-        <TouchableOpacity onPress={handleCreate} disabled={loading}>
-           <Text style={[styles.saveText, loading && { color: Colors.grayscale[500] }]}>저장</Text>
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -125,99 +196,89 @@ export default function ClassCreate() {
               style={[styles.iconPreview, { backgroundColor: categoryColor + '33' }]}
               onPress={() => setIconModalVisible(true)}
             >
-              <Ionicons name={icon as any} size={24} color={categoryColor} />
-              <View style={styles.editBadge}>
-                <Ionicons name="pencil" size={10} color="#FFF" />
-              </View>
+              <Ionicons name={icon as any} size={28} color={categoryColor} />
             </TouchableOpacity>
             <TextInput
-              style={styles.input}
+              style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' } as any]}
               placeholder="수업 이름을 입력하세요"
               value={className}
               onChangeText={setClassName}
+              underlineColorAndroid="transparent"
             />
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.label}>수업 기간</Text>
-          <View style={styles.dateContainer}>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker('start')}>
-              <Text style={styles.dateText}>{formatDate(startDate)}</Text>
+          <View style={styles.periodContainer}>
+            <TouchableOpacity style={styles.periodCard} onPress={() => openDatePicker('start')}>
+              <View style={[styles.periodIconWrapper, { backgroundColor: Colors.primary + '1A' }]}>
+                <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.periodTextWrapper}>
+                <Text style={styles.periodSubtitle}>시작일</Text>
+                <Text style={styles.periodValue}>{formatDateStr(startDate)}</Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={Colors.grayscale[400]} />
             </TouchableOpacity>
-            <Text style={styles.dateDivider}>~</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker('end')}>
-              <Text style={styles.dateText}>{formatDate(endDate)}</Text>
+            
+            <TouchableOpacity style={[styles.periodCard, { marginTop: 12 }]} onPress={() => openDatePicker('end')}>
+              <View style={[styles.periodIconWrapper, { backgroundColor: Colors.primary + '1A' }]}>
+                <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.periodTextWrapper}>
+                <Text style={styles.periodSubtitle}>종료일</Text>
+                <Text style={styles.periodValue}>{formatDateStr(endDate)}</Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={Colors.grayscale[400]} />
             </TouchableOpacity>
           </View>
-          {showDatePicker && (
-            <DateTimePicker
-              value={showDatePicker === 'start' ? startDate : endDate}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(null);
-                if (selectedDate) {
-                  if (showDatePicker === 'start') setStartDate(selectedDate);
-                  else setEndDate(selectedDate);
-                }
-              }}
-            />
-          )}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>수업 요일 및 시간</Text>
-          <View style={styles.daysContainer}>
-            {DAYS.map((day, index) => {
-              const isSelected = selectedDays.includes(day.id);
+          <Text style={styles.label}>수업 요일</Text>
+          <View style={styles.daysBoxContainer}>
+            <View style={styles.daysContainer}>
+              {DAYS.map((day, index) => {
+                const isSelected = selectedDays.includes(day.id);
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.dayButton, isSelected && { backgroundColor: Colors.primary }]}
+                    onPress={() => toggleDay(day.id)}
+                  >
+                    <Text style={[styles.dayText, isSelected && { color: '#FFF' }]}>{day.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {selectedDays.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.label}>수업 시간</Text>
+            {selectedDays.map(dayId => {
+              const dayObj = DAYS.find(d => d.id === dayId);
               return (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.dayButton, isSelected && { backgroundColor: Colors.primary }]}
-                  onPress={() => toggleDay(day.id)}
-                >
-                  <Text style={[styles.dayText, isSelected && { color: '#FFF' }]}>{day.label}</Text>
-                </TouchableOpacity>
+                <View key={dayId} style={styles.timeSettingsCard}>
+                  <View style={[styles.dayButton, { backgroundColor: Colors.primary, marginRight: 16 }]}>
+                    <Text style={[styles.dayText, { color: '#FFF' }]}>{dayObj?.label}</Text>
+                  </View>
+                  <View style={styles.timeSelectContainer}>
+                    <TouchableOpacity style={styles.timeButton} onPress={() => openTimePicker(dayId, 'start')}>
+                      <Text style={styles.timeText}>{formatTimeEn(dayTimes[dayId].start)}</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.dateDivider}>~</Text>
+                    <TouchableOpacity style={styles.timeButton} onPress={() => openTimePicker(dayId, 'end')}>
+                      <Text style={styles.timeText}>{formatTimeEn(dayTimes[dayId].end)}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               );
             })}
           </View>
-
-          {selectedDays.map(dayId => (
-            <View key={dayId} style={styles.timeSettingsContainer}>
-              <Text style={styles.timeDayLabel}>{DAYS.find(d => d.id === dayId)?.label}요일</Text>
-              <View style={styles.timeSelectContainer}>
-                <TouchableOpacity style={styles.timeButton} onPress={() => setShowTimePicker({day: dayId, type: 'start'})}>
-                  <Text style={styles.timeText}>{formatTime(dayTimes[dayId].start)}</Text>
-                </TouchableOpacity>
-                <Text style={styles.dateDivider}>~</Text>
-                <TouchableOpacity style={styles.timeButton} onPress={() => setShowTimePicker({day: dayId, type: 'end'})}>
-                  <Text style={styles.timeText}>{formatTime(dayTimes[dayId].end)}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-          {showTimePicker && (
-            <DateTimePicker
-              value={dayTimes[showTimePicker.day][showTimePicker.type]}
-              mode="time"
-              display="default"
-              onChange={(event, selectedDate) => {
-                const currentPicker = showTimePicker;
-                setShowTimePicker(null);
-                if (selectedDate && currentPicker) {
-                  setDayTimes({
-                    ...dayTimes,
-                    [currentPicker.day]: {
-                      ...dayTimes[currentPicker.day],
-                      [currentPicker.type]: selectedDate
-                    }
-                  });
-                }
-              }}
-            />
-          )}
-        </View>
+        )}
 
         <TouchableOpacity 
           style={[styles.createButton, loading && { backgroundColor: Colors.grayscale[500] }]} 
@@ -229,37 +290,153 @@ export default function ClassCreate() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={iconModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>아이콘 및 색상 선택</Text>
+      {/* DatePicker Modal for iOS */}
+      {Platform.OS === 'ios' ? (
+        <Modal visible={!!showDatePicker} transparent animationType="slide">
+          <View style={styles.pickerModalOverlay}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(null)}>
+                  <Text style={styles.pickerCancelText}>취소</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDateConfirm}>
+                  <Text style={styles.pickerConfirmText}>완료</Text>
+                </TouchableOpacity>
+              </View>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={(e, d) => d && setTempDate(d)}
+                  style={styles.datePicker}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        showDatePicker && (
+          <DateTimePicker
+            value={showDatePicker === 'start' ? startDate : endDate}
+            mode="date"
+            display="default"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(null);
+              if (selectedDate) {
+                if (showDatePicker === 'start') setStartDate(selectedDate);
+                else setEndDate(selectedDate);
+              }
+            }}
+          />
+        )
+      )}
+
+      {/* TimePicker Modal for iOS */}
+      {Platform.OS === 'ios' ? (
+        <Modal visible={!!showTimePicker} transparent animationType="slide">
+          <View style={styles.pickerModalOverlay}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <TouchableOpacity onPress={() => setShowTimePicker(null)}>
+                  <Text style={styles.pickerCancelText}>취소</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleTimeConfirm}>
+                  <Text style={styles.pickerConfirmText}>완료</Text>
+                </TouchableOpacity>
+              </View>
+              {showTimePicker && (
+                <DateTimePicker
+                  value={tempTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={(e, d) => d && setTempTime(d)}
+                  style={styles.datePicker}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        showTimePicker && (
+          <DateTimePicker
+            value={dayTimes[showTimePicker.day][showTimePicker.type]}
+            mode="time"
+            display="default"
+            onChange={(event, selectedDate) => {
+              const currentPicker = showTimePicker;
+              setShowTimePicker(null);
+              if (selectedDate && currentPicker) {
+                setDayTimes({
+                  ...dayTimes,
+                  [currentPicker.day]: {
+                    ...dayTimes[currentPicker.day],
+                    [currentPicker.type]: selectedDate
+                  }
+                });
+              }
+            }}
+          />
+        )
+      )}
+
+      {/* Icon & Color Bottom Sheet Modal */}
+      <Modal visible={iconModalVisible} transparent animationType="slide">
+        <View style={styles.bottomSheetOverlay}>
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>아이콘 수정</Text>
+              <TouchableOpacity onPress={() => setIconModalVisible(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color={Colors.grayscale[900]} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.iconPreviewContainer}>
+              <View style={[styles.largeIconPreview, { backgroundColor: categoryColor + '33' }]}>
+                <Ionicons name={icon as any} size={40} color={categoryColor} />
+              </View>
+            </View>
             
-            <Text style={styles.modalLabel}>색상</Text>
+            <Text style={styles.modalSectionLabel}>컬러</Text>
             <View style={styles.colorContainer}>
               {Object.values(Colors.categories).map((color, idx) => (
                 <TouchableOpacity 
                   key={idx} 
-                  style={[styles.colorCircle, { backgroundColor: color }, categoryColor === color && styles.colorSelected]} 
+                  style={[
+                    styles.colorCircle, 
+                    { backgroundColor: color }, 
+                    categoryColor === color && styles.colorSelected
+                  ]} 
                   onPress={() => setCategoryColor(color)}
                 />
               ))}
             </View>
 
-            <Text style={styles.modalLabel}>아이콘</Text>
-            <View style={styles.iconSelectContainer}>
-              {ICONS.map((ic, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  style={[styles.iconOption, icon === ic && { borderColor: Colors.primary, borderWidth: 2 }]} 
-                  onPress={() => setIcon(ic)}
-                >
-                  <Ionicons name={ic as any} size={28} color={categoryColor} />
-                </TouchableOpacity>
-              ))}
+            <Text style={styles.modalSectionLabel}>아이콘</Text>
+            <View style={styles.iconSelectGrid}>
+              {ICONS.map((ic, idx) => {
+                const isSelected = icon === ic;
+                return (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={[
+                      styles.iconOption, 
+                      { backgroundColor: isSelected ? categoryColor : Colors.grayscale[100] }
+                    ]} 
+                    onPress={() => setIcon(ic)}
+                  >
+                    <Ionicons 
+                      name={ic as any} 
+                      size={24} 
+                      color={isSelected ? '#FFF' : Colors.grayscale[500]} 
+                    />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIconModalVisible(false)}>
-              <Text style={styles.modalCloseText}>확인</Text>
+            <TouchableOpacity style={styles.applyButton} onPress={() => setIconModalVisible(false)}>
+              <Text style={styles.applyButtonText}>적용하기</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -270,43 +447,64 @@ export default function ClassCreate() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: Colors.grayscale[100] },
-  title: { fontFamily: 'Paybooc-Bold', fontSize: 18, color: Colors.grayscale[900] },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, backgroundColor: '#FFFFFF' },
+  title: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900] },
   backButton: { padding: 8 },
-  backText: { fontFamily: 'Paybooc-Bold', fontSize: 24, color: Colors.grayscale[900] },
   saveText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.primary, padding: 8 },
-  content: { flex: 1, padding: 24 },
+  content: { flex: 1, padding: 24, backgroundColor: Colors.grayscale[100] },
   section: { marginBottom: 32 },
   label: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900], marginBottom: 12 },
+  
   nameIconContainer: { flexDirection: 'row', alignItems: 'center' },
   iconPreview: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  editBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: Colors.grayscale[700], borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.background },
-  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 16, fontSize: 16, fontFamily: 'Paybooc-Bold', borderWidth: 1, borderColor: Colors.grayscale[300] },
-  dateContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dateButton: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: Colors.grayscale[300] },
-  dateText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900] },
-  dateDivider: { marginHorizontal: 16, fontFamily: 'Paybooc-Bold', fontSize: 18, color: Colors.grayscale[500] },
-  daysContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  dayButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.grayscale[300], justifyContent: 'center', alignItems: 'center' },
-  dayText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[700] },
-  timeSettingsContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#FFF', padding: 12, borderRadius: 12 },
-  timeDayLabel: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900], width: 60 },
+  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 16, fontSize: 16, fontFamily: 'Paybooc-Bold', borderWidth: 0 },
+  
+  periodContainer: {},
+  periodCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center' },
+  periodIconWrapper: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  periodTextWrapper: { flex: 1 },
+  periodSubtitle: { fontFamily: 'Paybooc-Bold', fontSize: 12, color: Colors.grayscale[500], marginBottom: 4 },
+  periodValue: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900] },
+  
+  daysBoxContainer: { backgroundColor: '#FFF', borderRadius: 16, padding: 16 },
+  daysContainer: { flexDirection: 'row', justifyContent: 'space-between' },
+  dayButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary + '1A', justifyContent: 'center', alignItems: 'center' },
+  dayText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.primary },
+  
+  timeSettingsCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   timeSelectContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  timeButton: { flex: 1, backgroundColor: Colors.grayscale[100], borderRadius: 8, padding: 12, alignItems: 'center' },
+  timeButton: { flex: 1, backgroundColor: Colors.grayscale[100], borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   timeText: { fontFamily: 'Paybooc-Bold', fontSize: 14, color: Colors.grayscale[900] },
-  createButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  dateDivider: { marginHorizontal: 12, fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[400] },
+  
+  createButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 8 },
   createButtonText: { fontFamily: 'Paybooc-Bold', fontSize: 18, color: '#FFF' },
   
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '80%', backgroundColor: '#FFF', borderRadius: 24, padding: 24 },
-  modalTitle: { fontFamily: 'Paybooc-Bold', fontSize: 20, color: Colors.grayscale[900], marginBottom: 24, textAlign: 'center' },
-  modalLabel: { fontFamily: 'Paybooc-Bold', fontSize: 14, color: Colors.grayscale[700], marginBottom: 12 },
-  colorContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-  colorCircle: { width: 40, height: 40, borderRadius: 20 },
-  colorSelected: { borderWidth: 3, borderColor: Colors.grayscale[900] },
-  iconSelectContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
-  iconOption: { width: '30%', aspectRatio: 1, backgroundColor: Colors.grayscale[100], borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  modalCloseBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-  modalCloseText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: '#FFF' }
+  pickerModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  pickerModalContent: { backgroundColor: '#FFF', paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: Colors.grayscale[100] },
+  pickerCancelText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[500] },
+  pickerConfirmText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.primary },
+  datePicker: { alignSelf: 'center', width: '100%', height: 200 },
+  
+  bottomSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  bottomSheetContent: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, height: '85%' },
+  bottomSheetHeader: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 32 },
+  bottomSheetTitle: { fontFamily: 'Paybooc-Bold', fontSize: 18, color: Colors.grayscale[900] },
+  closeButton: { position: 'absolute', right: 0, backgroundColor: Colors.grayscale[100], borderRadius: 20, padding: 4 },
+  
+  iconPreviewContainer: { alignItems: 'center', marginBottom: 32 },
+  largeIconPreview: { width: 80, height: 80, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  
+  modalSectionLabel: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900], marginBottom: 16 },
+  colorContainer: { flexDirection: 'row', gap: 12, marginBottom: 32, flexWrap: 'wrap' },
+  colorCircle: { width: 48, height: 48, borderRadius: 24 },
+  colorSelected: { borderWidth: 3, borderColor: Colors.grayscale[300] },
+  
+  iconSelectGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
+  iconOption: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  
+  applyButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 'auto', marginBottom: 32 },
+  applyButtonText: { fontFamily: 'Paybooc-Bold', fontSize: 18, color: '#FFF' }
 });

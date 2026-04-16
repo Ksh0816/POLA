@@ -213,7 +213,7 @@ export default function ClassDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: Colors.grayscale[100] },
-  title: { flex: 1, textAlign: 'center', fontFamily: 'Paybooc-Bold', fontSize: 18, color: Colors.grayscale[900], paddingHorizontal: 16 },
+  title: { flex: 1, textAlign: 'center', fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900], paddingHorizontal: 16 },
   backButton: { width: 40, alignItems: 'flex-start' },
   backText: { fontFamily: 'Paybooc-Bold', fontSize: 24, color: Colors.grayscale[900] },
   headerRight: { width: 40, alignItems: 'flex-end' },
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   content: { flex: 1, padding: 24 },
   section: { marginBottom: 32 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontFamily: 'Paybooc-Bold', fontSize: 20, color: Colors.grayscale[900] },
+  sectionTitle: { fontFamily: 'Paybooc-Bold', fontSize: 18, color: Colors.grayscale[900] },
   membersList: { flexDirection: 'row' },
   memberItem: { alignItems: 'center', marginRight: 16 },
   memberProfile: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.grayscale[300], marginBottom: 8 },
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   relativeDateBadge: { backgroundColor: Colors.grayscale[100], paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   relativeDateText: { fontFamily: 'Paybooc-Bold', fontSize: 12, color: Colors.grayscale[700] },
   menuContainer: { gap: 12 },
-  menuButton: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
+  menuButton: { backgroundColor: '#FFF', borderRadius: 16, padding: 10, flexDirection: 'row', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
   menuIconContainer: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.lightBlue, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  menuText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[900] },
+  menuText: { fontFamily: 'Paybooc-Bold', fontSize: 16, color: Colors.grayscale[700] },
 });
